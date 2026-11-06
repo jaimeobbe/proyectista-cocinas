@@ -1,0 +1,19 @@
+{
+  "name": "Proyectista de Cocinas",
+  "short_name": "Proyectista",
+  "description": "Diseño de cocinas a medida en 3D para enseñar al cliente en obra.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "es",
+  "background_color": "#E9ECEA",
+  "theme_color": "#1C5FB8",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
