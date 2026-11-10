@@ -145,7 +145,7 @@
   A.openPanel = function(p){ A.panel=p; $$('#rail button').forEach(b=>b.setAttribute('aria-current', b.dataset.p===p? 'page':'false')); $('#panel').hidden=false; document.body.classList.add('panel-open'); renderPanel(); };
   function renderPanel(){ const p=PANELS[A.panel]; if(!p) return; const el=$('#panelBody'); const sc=el.scrollTop; $('#panelTitle').textContent=p.t; const html=p.f(); if(typeof html==='string') el.innerHTML=html; bindPanel(el); el.scrollTop=sc; }
   A.renderPanel = renderPanel;
-  function field(id,label,val,extra){ return `<label class="fld"><span>${label}</span><input id="${id}" inputmode="decimal" value="${esc(val)}" ${extra||''}></label>`; }
+  function field(id,label,val,extra){ extra=extra||''; return `<label class="fld"><span>${label}</span><input id="${id}" ${/inputmode=/.test(extra)?'':'inputmode="decimal"'} value="${esc(val)}" ${extra}></label>`; }
   function sel(id,label,opts,val){ return `<label class="fld"><span>${label}</span><select id="${id}">${opts.map(o=>`<option value="${esc(o[0])}" ${String(o[0])===String(val)?'selected':''}>${esc(o[1])}</option>`).join('')}</select></label>`; }
   function swatches(group, items, val, key){ return `<div class="sw-grid" data-sw="${group}">${items.map(it=>`<button type="button" class="sw ${it.k===val?'on':''}" data-k="${esc(it.k)}" title="${esc(it.n)}" aria-label="${esc(it.n)}"><i style="background:${swBg(it)}"></i><b>${esc(it.n)}</b></button>`).join('')}</div>`; }
   function swBg(it){ const c=it.c||'#ccc'; const g=it.g; if(g==='madera'||g==='tarima'||g==='espiga') return `repeating-linear-gradient(90deg, ${c} 0 5px, ${K.shade(c,-0.12)} 5px 6px, ${c} 6px 11px)`; if(g&&g.startsWith('marmol')) return `linear-gradient(125deg, ${c} 40%, ${g==='marmol_oro'?'#b89a62':K.shade(c,-0.35)} 41%, ${c} 44%, ${c} 70%, ${K.shade(c,-0.25)} 71%, ${c} 73%)`; if(g==='granito'||g==='granulado'||g==='terrazo') return `radial-gradient(${K.shade(c,-0.3)} 1px, transparent 1.5px) 0 0/5px 5px, radial-gradient(${K.shade(c,0.2)} 1px, transparent 1.5px) 2px 3px/6px 6px, ${c}`; if(g==='ajedrez') return 'conic-gradient(#1f1f20 25%, #ecebe6 0 50%, #1f1f20 0 75%, #ecebe6 0) 0 0/14px 14px'; if(g==='hidraulico') return `radial-gradient(circle at 0 0, #2f4b5a 35%, transparent 36%) 0 0/12px 12px, ${c}`; return c; }
@@ -310,7 +310,7 @@
         case 'resetPrices': st.prices=K.clone(K.PRICES_DEFAULT); A.commit('tarifas'); renderPanel(); break;
         case 'saveProj': saveProject(false); break;
         case 'saveVariant': saveProject(true); break;
-        case 'newProj': confirmBox('¿Empezar un proyecto nuevo? Los cambios sin guardar de este se pierden.', ()=>{ A.state=K.newState(); A.selId=null; A.hist=[]; A.commit('nuevo',{panel:true}); A.openPanel('estancia'); }); break;
+        case 'newProj': confirmBox('¿Empezar un proyecto nuevo? Los cambios sin guardar de este se pierden.', ()=>{ A.state=K.newState(); A.selId=null; A.hist=[]; A._lastSession=null; A.commit('nuevo',{panel:true}); welcome(); }); break;
         case 'openProj': { const list=LS.get('pc_projects',[]); const p=list[+b.dataset.i]; if(p){ A.state=migrate(K.clone(p.state)); A.selId=null; A.hist=[]; A.commit('abrir',{panel:true}); toast('Proyecto abierto'); } break; }
         case 'delProj': { const i=+b.dataset.i; confirmBox('¿Eliminar este proyecto guardado?', ()=>{ const list=LS.get('pc_projects',[]); list.splice(i,1); LS.set('pc_projects',list); renderPanel(); }); break; }
         case 'exportJson': saveFile((st.meta.name||'cocina').replace(/[^\w\- áéíóúñ]/gi,'')+'.json', JSON.stringify(st,null,1)); break;
@@ -517,6 +517,30 @@
   function migrate(s){ const d=K.newState(); s.conf=Object.assign(d.conf,s.conf||{}); s.finish=Object.assign(d.finish,s.finish||{}); s.finish.zones=Object.assign(d.finish.zones,s.finish.zones||{}); s.prices=Object.assign(d.prices,s.prices||{}); s.meta=Object.assign(d.meta,s.meta||{}); s.openings=s.openings||[]; s.obstacles=s.obstacles||[]; s.modules=(s.modules||[]).filter(m=>C()[m.kind]); s.modules.forEach(m=>m.o=m.o||{}); return s; }
   A.migrate=migrate;
 
+  /* ---------- Pantalla de inicio ---------- */
+  function welcome(){
+    const last=A._lastSession, list=LS.get('pc_projects',[]);
+    modal(`<div class="welcome"><h3>Nueva cocina</h3>
+      <p class="hint">Mete las medidas interiores de la habitación en centímetros. Después añadirás puertas, ventanas y muebles.</p>
+      <div class="row3">${field('wW','Ancho',340)}${field('wD','Fondo',280)}${field('wH','Alto',250)}</div>
+      ${field('wCli','Cliente (opcional)','','inputmode="text" placeholder="Nombre del cliente"')}
+      <div class="btns"><button class="btn primary big" data-act="wNew">Empezar cocina</button></div>
+      <div class="w-alt">
+        ${last?`<button class="btn" data-act="wLast">Seguir con la última<small>${esc(last.meta&&last.meta.name||'Cocina')} · ${(last.modules||[]).length} elemento${(last.modules||[]).length===1?'':'s'}</small></button>`:''}
+        ${list.length?`<button class="btn" data-act="wOpen">Abrir un proyecto guardado<small>${list.length} guardado${list.length>1?'s':''}</small></button>`:''}
+        <button class="btn" data-act="wScan">Escanear la habitación con vídeo<small>Detecta puertas y ventanas</small></button>
+        <button class="btn" data-act="wVoice">Dictárselo al asistente<small>«Mide tres cuarenta por dos ochenta…»</small></button>
+      </div></div>`, (e)=>{
+        const a=e.target.closest('[data-act]'); if(!a) return; const st=A.state;
+        if(a.dataset.act==='wNew'){ st.room.W=Math.max(100,num($('#wW').value,340)); st.room.D=Math.max(100,num($('#wD').value,280)); st.room.H=Math.max(180,num($('#wH').value,250)); const cli=$('#wCli').value.trim(); if(cli){ st.meta.client.nombre=cli; st.meta.name='Cocina '+cli; } $('#modal').hidden=true; K.D2.resetPlan(); A.commit('nueva',{panel:true}); A.openPanel('estancia'); setTimeout(()=>K.S3.view('persp'),60); toast('Añade ahora puertas, ventanas y la toma de agua'); }
+        if(a.dataset.act==='wLast'){ A.state=migrate(K.clone(last)); A.hist=[]; $('#modal').hidden=true; A.commit('continuar',{panel:true}); setTimeout(()=>K.S3.view('persp'),60); }
+        if(a.dataset.act==='wOpen'){ $('#modal').hidden=true; A.openPanel('proyectos'); }
+        if(a.dataset.act==='wScan'){ $('#modal').hidden=true; A.openPanel('escaner'); }
+        if(a.dataset.act==='wVoice'){ $('#modal').hidden=true; $('#aiSheet').hidden=false; setTimeout(()=>$('#aiText').focus(),50); }
+      });
+  }
+  A.welcome=welcome;
+
   /* ---------- Ejemplo inicial ---------- */
   function sample(){
     const st=K.newState(); st.meta.name='Cocina de ejemplo'; st.room={W:360,D:300,H:255,floor:'porc_gris',wallColor:'#EFEDE8',ceilColor:'#F7F6F3'};
@@ -533,7 +557,8 @@
   /* ---------- Inicio ---------- */
   A.start = function(){
     const saved=LS.get('pc_current',null);
-    A.state = saved && saved.room ? migrate(saved) : sample(); A._last=K.clone(A.state);
+    A._lastSession = saved && saved.room && (saved.modules||[]).length ? saved : null;
+    A.state = K.newState(); A._last=K.clone(A.state);
     K.S3.init($('#v3d'));
     // barra superior
     $('#viewSeg').onclick=(e)=>{ const b=e.target.closest('button'); if(!b) return; if(b.dataset.v==='walk'){ A.setView('3d'); setTimeout(()=>{ K.S3.walk(true); $('#walkPad').hidden=false; },60); return; } A.setView(b.dataset.v); };
@@ -555,6 +580,7 @@
     window.addEventListener('resize',()=>{ if(A.view!=='3d'){ K.D2.resetPlan(); draw2d(); } });
     A.setView('3d'); A.openPanel(window.innerWidth<900? 'estancia':'estancia'); if(window.innerWidth<900){ $('#panel').hidden=true; document.body.classList.remove('panel-open'); }
     A.render({panel:true}); setTimeout(()=>K.S3.view('persp'),50);
+    welcome();
     if(K.platformInit) K.platformInit();
     if(K.AS) K.AS.init();
   };
