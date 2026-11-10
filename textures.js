@@ -42,7 +42,7 @@
     if(!g || g==='liso') return null;
     const key = g+'|'+color+'|'+(seed||0);
     if(cache[key]) return cache[key];
-    const n = (g==='granito'||g==='granulado')? 256 : 512;
+    const n = (g==='granito'||g==='granulado')? 256 : (K.LOW? 256 : 512);
     const c = canvas(n); const ctx=c.getContext('2d'); const r=rng((seed||7)*9301+g.length*49297);
     let p = g;
     if(g==='marmol_oro'){ painters.marmol(ctx,n,color,r,'#b89a62'); }

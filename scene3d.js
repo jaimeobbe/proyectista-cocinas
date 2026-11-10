@@ -6,19 +6,24 @@
   const matCache={};
   const C=()=>K.CATALOG;
 
+  // Perfil ligero para móviles y tablets: menos resolución, sombras más pequeñas y dibujo sólo cuando algo cambia
+  const UA=navigator.userAgent||''; const IOS=/iP(hone|ad|od)/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints>1);
+  const LOW = K.LOW = IOS || /Android|Mobi/i.test(UA) || (navigator.maxTouchPoints>0 && Math.min(screen.width,screen.height)<900);
+  let needs=true; S.invalidate=()=>{ needs=true; };
   S.init = function(el){
-    renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+    renderer = new THREE.WebGLRenderer({antialias:!LOW, preserveDrawingBuffer:true, powerPreference: LOW?'low-power':'high-performance'});
+    renderer.setPixelRatio(LOW? Math.min(IOS?1.5:1.25, window.devicePixelRatio||1) : Math.min(2, window.devicePixelRatio||1));
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = LOW? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate=false;
     el.appendChild(renderer.domElement);
     scene = new THREE.Scene(); scene.background = new THREE.Color('#dfe3e4').convertSRGBToLinear();
     camera = new THREE.PerspectiveCamera(45, 1, 2, 8000);
     camera.position.set(170, 420, 720);
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = Math.PI*0.495; controls.minDistance=40; controls.maxDistance=2500;
-    controls.target.set(170, 90, 140);
+    controls.target.set(170, 90, 140); controls.addEventListener('change', ()=>{ needs=true; });
+    renderer.domElement.addEventListener('webglcontextlost', (e)=>{ e.preventDefault(); if(K.app) K.app.toast('La vista 3D se ha reiniciado por falta de memoria'); }); renderer.domElement.addEventListener('webglcontextrestored', ()=>{ if(K.app){ K.app.dirty3d=true; K.app.render(); } });
     try{ if(THREE.RoomEnvironment){ const pm=new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; S.hasEnv=true; } }catch(e){}
     root = new THREE.Group(); scene.add(root);
     raycaster = new THREE.Raycaster(); clock = new THREE.Clock();
@@ -26,8 +31,8 @@
     bindPointer(renderer.domElement);
     animate();
   };
-  S.resize = function(){ if(!renderer) return; const w=S.el.clientWidth||1, h=S.el.clientHeight||1; renderer.setSize(w,h,false); renderer.domElement.style.width=w+'px'; renderer.domElement.style.height=h+'px'; camera.aspect=w/h; camera.updateProjectionMatrix(); };
-  S.setBg = function(c){ if(scene) scene.background=new THREE.Color(c).convertSRGBToLinear(); };
+  S.resize = function(){ if(!renderer) return; needs=true; const w=S.el.clientWidth||1, h=S.el.clientHeight||1; renderer.setSize(w,h,false); renderer.domElement.style.width=w+'px'; renderer.domElement.style.height=h+'px'; camera.aspect=w/h; camera.updateProjectionMatrix(); };
+  S.setBg = function(c){ if(scene) scene.background=new THREE.Color(c).convertSRGBToLinear(); needs=true; };
 
   /* ---------- Materiales ---------- */
   function M(key, fn){ if(!matCache[key]) matCache[key]=fn(); return matCache[key]; }
@@ -66,6 +71,7 @@
     buildSplash();
     S.select(selId);
     applyOpen(openT);
+    renderer.shadowMap.needsUpdate=true; needs=true;
   };
 
   function buildRoom(){
@@ -120,7 +126,7 @@
     const amb=new THREE.AmbientLight('#ffffff', L==='noche'?0.03:0.05); root.add(amb);
     const sun=new THREE.DirectionalLight(L==='tarde'?'#ffd8a8':'#fffaf0', L==='noche'?0.1:(L==='tarde'?0.75:0.9));
     sun.position.set(r.W*0.2-300, 620, r.D+420); sun.target.position.set(r.W/2,0,r.D/2); sun.castShadow=true;
-    const s=Math.max(r.W,r.D); sun.shadow.camera.left=-s; sun.shadow.camera.right=s; sun.shadow.camera.top=s; sun.shadow.camera.bottom=-s; sun.shadow.camera.near=50; sun.shadow.camera.far=2500; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias=-0.0006; sun.shadow.normalBias=0.6;
+    const s=Math.max(r.W,r.D); sun.shadow.camera.left=-s; sun.shadow.camera.right=s; sun.shadow.camera.top=s; sun.shadow.camera.bottom=-s; sun.shadow.camera.near=50; sun.shadow.camera.far=2500; sun.shadow.mapSize.set(LOW?1024:2048, LOW?1024:2048); sun.shadow.bias=-0.0006; sun.shadow.normalBias=0.6;
     root.add(sun); root.add(sun.target);
     const temp = st.finish.lightTemp==='fria'?'#eef4ff': st.finish.lightTemp==='neutra'?'#fff8ee':'#ffe6c4';
     const ceil=new THREE.PointLight(temp, L==='noche'?0.55:0.18, 0, 2); ceil.decay=0; ceil.position.set(r.W/2, r.H-20, r.D/2); root.add(ceil);
@@ -356,16 +362,16 @@
 
   /* ---------- Selección ---------- */
   S.select = function(id){
-    if(selBox){ root.remove(selBox); selBox.geometry.dispose(); selBox=null; }
+    if(selBox){ root.remove(selBox); selBox.geometry.dispose(); selBox=null; } needs=true;
     if(!id || !st) return; const m=st.modules.find(x=>x.id===id); if(!m) return;
     const yb = K.cat(m)==='campana'? Math.max(m.h, st.room.H-m.y) : m.h;
     const geo=new THREE.EdgesGeometry(new THREE.BoxGeometry(m.w+1,yb+1,m.d+1));
     selBox=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:'#1f6fd1', depthTest:false})); selBox.renderOrder=999;
-    selBox.position.set(m.x, m.y+yb/2, m.z); selBox.rotation.y=m.rot*Math.PI/180; root.add(selBox);
+    selBox.position.set(m.x, m.y+yb/2, m.z); selBox.rotation.y=m.rot*Math.PI/180; root.add(selBox); needs=true;
   };
 
   /* ---------- Abrir puertas ---------- */
-  S.setOpen = function(v){ openTarget = v?1:0; };
+  S.setOpen = function(v){ openTarget = v?1:0; needs=true; };
   function applyOpen(t){
     pivots.forEach(p=>{ const d=p.userData; const e=t*t*(3-2*t);
       if(d.type==='puerta'){ p.rotation.y = (d.hinge==='der'? 1 : -1) * e * 1.75; }
@@ -389,7 +395,7 @@
       let p, tgt=c.clone(); if(door){ const q=K.wallPoint(r,door.wall,door.pos+door.width/2,25); p=new THREE.Vector3(q.x,162,q.z); } else p=new THREE.Vector3(r.W/2,162,r.D-25);
       camera.position.copy(p); tgt.y=120; controls.target.copy(tgt); controls.minDistance=1;
     }
-    controls.update();
+    controls.update(); needs=true;
   };
   S.walk = function(on){
     if(!on){ S.view('persp'); return; }
@@ -397,8 +403,8 @@
     const door=st.openings.find(o=>/puerta|paso|corredera/.test(o.type)); if(door){ const q=K.wallPoint(r,door.wall,door.pos+door.width/2,30); walk.pos.set(q.x,162,q.z); const dx=r.W/2-q.x, dz=r.D/2-q.z; walk.yaw=Math.atan2(dx,dz); }
     controls.enabled=false;
   };
-  S.walkMove = function(fw, side, turn){ if(!walk) return; walk.yaw += (turn||0)*0.06; const dx=Math.sin(walk.yaw), dz=Math.cos(walk.yaw); walk.pos.x += (dx*fw + dz*side)*8; walk.pos.z += (dz*fw - dx*side)*8; const r=st.room; walk.pos.x=Math.max(20,Math.min(r.W-20,walk.pos.x)); walk.pos.z=Math.max(20,Math.min(r.D-20,walk.pos.z)); };
-  S.setAutoRotate = function(v){ autoRotate=v; controls.autoRotate=v; controls.autoRotateSpeed=0.8; };
+  S.walkMove = function(fw, side, turn){ if(!walk) return; needs=true; walk.yaw += (turn||0)*0.06; const dx=Math.sin(walk.yaw), dz=Math.cos(walk.yaw); walk.pos.x += (dx*fw + dz*side)*8; walk.pos.z += (dz*fw - dx*side)*8; const r=st.room; walk.pos.x=Math.max(20,Math.min(r.W-20,walk.pos.x)); walk.pos.z=Math.max(20,Math.min(r.D-20,walk.pos.z)); };
+  S.setAutoRotate = function(v){ autoRotate=v; needs=true; controls.autoRotate=v; controls.autoRotateSpeed=0.8; };
   S.snapshot = function(w,h){ const ow=renderer.domElement.width, oh=renderer.domElement.height; if(w&&h){ renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); } renderer.render(scene,camera); const url=renderer.domElement.toDataURL('image/png'); if(w&&h){ S.resize(); } return url; };
   S.snapshotBlob = function(){ return new Promise(res=>{ renderer.render(scene,camera); renderer.domElement.toBlob(b=>res(b),'image/png'); }); };
 
@@ -424,7 +430,7 @@
       const fp=floorPoint(e, drag.y); if(!fp) return; const m=st.modules.find(x=>x.id===drag.id);
       const cand = Object.assign({}, m, {x:fp.x+drag.dx, z:fp.z+drag.dz});
       K.snapModule(cand, st);
-      drag.cand=cand; drag.obj.position.set(cand.x, cand.y, cand.z); drag.obj.rotation.y=cand.rot*Math.PI/180;
+      drag.cand=cand; needs=true; renderer.shadowMap.needsUpdate=true; drag.obj.position.set(cand.x, cand.y, cand.z); drag.obj.rotation.y=cand.rot*Math.PI/180;
       if(selBox){ selBox.position.x=cand.x; selBox.position.z=cand.z; selBox.rotation.y=drag.obj.rotation.y; }
       K.app.liveInfo(cand);
     });
@@ -437,14 +443,18 @@
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', ()=>{ if(drag && !drag.walk){ controls.enabled=true; K.app.render(); } drag=null; downPt=null; });
   }
 
+  let lastWallKey='';
   function animate(){
     requestAnimationFrame(animate);
     const dt=Math.min(0.05, clock.getDelta());
-    if(Math.abs(openT-openTarget)>0.001){ openT += Math.sign(openTarget-openT)*Math.min(Math.abs(openTarget-openT), dt*1.6); applyOpen(openT); }
-    if(mode==='walk' && walk){ camera.position.copy(walk.pos); const t=new THREE.Vector3(walk.pos.x+Math.sin(walk.yaw)*Math.cos(walk.pitch), walk.pos.y+Math.sin(walk.pitch), walk.pos.z+Math.cos(walk.yaw)*Math.cos(walk.pitch)); camera.lookAt(t); }
-    else controls.update();
-    // paredes recortadas
-    if(st){ const r=st.room; wallMeshes.forEach(g=>{ const w=g.userData.wall; let vis=true; if(mode!=='walk'){ const cp=camera.position; if(w===0) vis = cp.z > 0 - 5; if(w===1) vis = cp.x < r.W + 5; if(w===2) vis = cp.z < r.D + 5; if(w===3) vis = cp.x > -5; if(!vis) {} } g.visible = vis || S.allWalls===true; }); }
+    let anim=false;
+    if(Math.abs(openT-openTarget)>0.001){ openT += Math.sign(openTarget-openT)*Math.min(Math.abs(openTarget-openT), dt*1.6); applyOpen(openT); anim=true; renderer.shadowMap.needsUpdate=true; }
+    if(mode==='walk' && walk){ const t=new THREE.Vector3(walk.pos.x+Math.sin(walk.yaw)*Math.cos(walk.pitch), walk.pos.y+Math.sin(walk.pitch), walk.pos.z+Math.cos(walk.yaw)*Math.cos(walk.pitch)); if(!camera.position.equals(walk.pos) || !S._lastLook || !S._lastLook.equals(t)){ camera.position.copy(walk.pos); camera.lookAt(t); S._lastLook=t; anim=true; } }
+    else if(controls.update()) anim=true;
+    if(!(anim||needs||autoRotate)) return;
+    needs=false;
+    // paredes recortadas según el punto de vista
+    if(st){ const r=st.room; let key=''; wallMeshes.forEach(g=>{ const w=g.userData.wall; let vis=true; if(mode!=='walk'){ const cp=camera.position; if(w===0) vis = cp.z > -5; if(w===1) vis = cp.x < r.W + 5; if(w===2) vis = cp.z < r.D + 5; if(w===3) vis = cp.x > -5; } g.visible = vis || S.allWalls===true; key+=g.visible?1:0; }); if(key!==lastWallKey){ lastWallKey=key; renderer.shadowMap.needsUpdate=true; } }
     renderer.render(scene,camera);
   }
 })();

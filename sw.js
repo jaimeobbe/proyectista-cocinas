@@ -1,5 +1,5 @@
 /* Funcionamiento sin conexión: guarda la app en el dispositivo y la actualiza en segundo plano. */
-const VERSION='proyectista-1.0.0';
+const VERSION='proyectista-1.0.1';
 const FILES=['./','index.html','manifest.webmanifest','platform.js','data.js','textures.js','model.js','draw2d.js','scene3d.js','app.js','assist.js',
  'vendor/three.min.js','vendor/OrbitControls.js','vendor/RoomEnvironment.js',
  'icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png',

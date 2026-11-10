@@ -328,9 +328,10 @@ body.present .main{grid-template-columns:1fr} body.present .app{grid-template-ro
 <script>
   (function(){
     function go(){ try{ const sc=getComputedStyle(document.documentElement).getPropertyValue('--scene').trim(); K.app.start(); K.S3.setBg(sc); window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ K.S3.setBg(getComputedStyle(document.documentElement).getPropertyValue('--scene').trim()); if(K.app.view!=='3d') K.app.redraw2d(); }); }catch(e){ console.error(e); document.getElementById('stage').insertAdjacentHTML('beforeend','<p style="position:absolute;left:16px;top:60px;max-width:420px;background:var(--panel);padding:12px;border-radius:8px">No se ha podido iniciar la vista 3D en este dispositivo. Prueba con un navegador actualizado.</p>'); } }
-    K.VERSION='1.0.0';
+    K.VERSION='1.0.1';
     if(window.THREE && THREE.OrbitControls) go(); else window.addEventListener('load', go);
-    if('serviceWorker' in navigator && location.protocol!=='file:'){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
+    if('serviceWorker' in navigator && location.protocol!=='file:'){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+      const hadCtl=!!navigator.serviceWorker.controller; let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadCtl && !reloaded){ reloaded=true; location.reload(); } }); }
     let deferred=null; window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferred=e; const b=document.getElementById('installBtn'); if(b) b.hidden=false; });
     document.addEventListener('click',(e)=>{ if(e.target.closest('#installBtn') && deferred){ deferred.prompt(); deferred.userChoice.finally(()=>{ deferred=null; document.getElementById('installBtn').hidden=true; }); } });
     window.addEventListener('appinstalled',()=>{ const b=document.getElementById('installBtn'); if(b) b.hidden=true; });
